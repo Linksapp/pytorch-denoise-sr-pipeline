@@ -44,9 +44,19 @@ class DenoiseResidualBlock(nn.Module):
         self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(channels, channels, 3, padding=dilation, dilation=dilation)
-        self.channel_attention = ChannelAttention(channels, reduction)
-        self.spatial_attention = SpatialAttention()
         self.attention_type = attention_type
+
+        self.use_channel_attention =  self.attention_type in ['CBAM', 'Channel']
+        self.use_spatial_attention =  self.attention_type in ['CBAM', 'Spatial']
+
+        if self.use_channel_attention:
+            self.channel_attention = ChannelAttention(channels, reduction)
+        if self.use_spatial_attention:
+            self.spatial_attention = SpatialAttention()
+
+        # self.channel_attention = ChannelAttention(channels, reduction)
+        # self.spatial_attention = SpatialAttention()
+        
         self.res_scale = res_scale
     
 
@@ -54,15 +64,19 @@ class DenoiseResidualBlock(nn.Module):
         residual = x
         out = self.relu(self.conv1(x))
         out = self.conv2(out)
-        if self.attention_type in ['CBAM', 'Channel']:
+        
+        if self.use_channel_attention:
             out = self.channel_attention(out) 
-        if self.attention_type in ['CBAM', 'Spatial']:
+        if self.use_spatial_attention:
             out = self.spatial_attention(out)
+
+        # out = self.channel_attention(out)
+        # out = self.spatial_attention(out)
         
         return out * self.res_scale + residual # skip-connection + residual scaling
 
 class EnhancedDenoiser(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, reduction=1, num_blocks=1, num_filters=64, dilation=1, attention_type='CBAM', res_scale=1):
+    def __init__(self, in_channels=3, out_channels=3, reduction=1, num_blocks=1, num_filters=64, dilation=1, attention_type=None, res_scale=1):
         super().__init__()
         self.head = nn.Conv2d(in_channels, num_filters, 3, padding=1)
         if dilation == 1:
